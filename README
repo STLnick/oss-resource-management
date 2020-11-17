@@ -1,0 +1,26 @@
+OS Project 5
+Operating System Simulator - Resource Management
+
+Version Control:
+GitHub repo: https://github.com/STLnick/oss-resource-management
+
+
+To run the program:
+First run 'make' to build 'oss' and 'user_proc'
+
+Run command example:
+./oss
+
+***************v TODO: Add description of 'verbose' option **************
+
+* Use -h to get a basic description of the program
+
+What Works:
+
+
+What Doesn't Work:
+
+
+Commit Log:
+(All commits also on GitHub: https://github.com/STLnick/oss-resource-management)
+
