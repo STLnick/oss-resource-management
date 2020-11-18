@@ -72,11 +72,11 @@ int main (int argc, char **argv)
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
   // RECEIVE message from the queue
-  if(msgrcv(msgid, &buf, sizeof(buf.mtext), pcbindex, 0) == -1)
-  {
-    perror("user.c - msgrcv");
-    exit(1);
-  }
+  //if(msgrcv(msgid, &buf, sizeof(buf.mtext), pcbindex, 0) == -1)
+  //{
+  //  perror("user.c - msgrcv");
+  //  exit(1);
+  //}
 
   // Seed random number generator
   //srand((unsigned int) getpid());
@@ -85,7 +85,7 @@ int main (int argc, char **argv)
 
   // Setup message to send
   buf.mtype = 99;
-  strcpy(buf.mtext, strtq_used);
+  strcpy(buf.mtext, "TEST");
   len = strlen(buf.mtext);
 
   // SEND message
@@ -105,7 +105,6 @@ int main (int argc, char **argv)
   // Detach from all shared memory segments
   detach(clocksecid, clocksec);
   detach(clocknanoid, clocknano);
-  detach(shmpcbsid, shmpcbs);
 
   printf("::END:: Child Process\n");
 

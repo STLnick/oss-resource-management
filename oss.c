@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define LOOP_INC 100000000
 #define PERMS 0664
 
 /* Message Queue structure */
@@ -19,6 +20,7 @@ struct msgbuf {
   char mtext[100];
 };
 
+void incrementclock(unsigned int *sec, unsigned int *nano, int amount);
 int detachandremove(int shmid, void *shmaddr);
 void displayhelpinfo();
 void generaterandomtime(unsigned int *nano, unsigned int *sec, unsigned int maxnano, unsigned int maxsec);
@@ -140,9 +142,6 @@ int main(int argc, char **argv)
   }
 
 
-  // TESTING GENERATION OF RANDOM DELAY
-  generaterandomtime(&delaynano, &delaysec, MAX_TIME_BETWEEN_PROCS_NS, MAX_TIME_BETWEEN_PROCS_SEC);
-
   // TESTING: example of how to write to file
   //fprintf(logptr, "nano delay: %u || sec delay: %u\n", delaynano, delaysec);
 
@@ -155,8 +154,9 @@ int main(int argc, char **argv)
   char strclocknanoid[100+1] = {'\0'}; // Create string from shared memory clock nanoseconds id
   sprintf(strclocknanoid, "%d", clocknanoid); 
 
-  char strshmpcbsid[100+1] = {'\0'}; // Create string from shared memory PCB array id
-  sprintf(strshmpcbsid, "%d", shmpcbsid); 
+
+  /* * * TODO: SETUP RESOURCE DESCRIPTORS * * */ // Like the max claims, allocation, resource, and available tables
+
 
 
 
@@ -166,8 +166,20 @@ int main(int argc, char **argv)
 
 
   // TODO: Implement the Main Loop Logic ! ! !
+  // 1. Non-blocking receive on message queue (processes requesting resources, terminating, releasing a resource)
+  // 2. Increment Shared Clock
+
+  int i;
+  for (i = 0; i < 20; i++) {
 
 
+
+
+
+    // Increment shared clock
+    incrementclock(clocksec, clocknano, LOOP_INC);
+    //*clocknano += LOOP_INC;
+  }
 
 
 
@@ -191,6 +203,22 @@ int main(int argc, char **argv)
   detachandremove(clocksecid, clocksec);
 
   return 0;
+}
+
+void incrementclock(unsigned int *sec, unsigned int *nano, int amount)
+{
+  printf("- - Increment - -\n");
+  printf("- amount: %d\n", amount);
+  printf("- sec:    %u\n", *sec);
+  printf("- nano:    %u\n", *nano);
+
+  int sum = *nano + amount;
+  if (sum > 1000000000) {
+    *nano = (sum - 1000000000);
+    *sec += 1;
+  } else {
+    *nano = sum;
+  }
 }
 
 void displayhelpinfo()
@@ -245,36 +273,3 @@ void generaterandomtime(unsigned int *nano, unsigned int *sec, unsigned int maxn
   }
 }
 
-void scheduleprocess(struct msgbuf *buf, int *len, int msgid, unsigned int dispatchtime, int childpid, unsigned int *clocksec, unsigned int *clocknano, FILE *logptr)
-{
-  // TODO: Generate and store random time quantam
-
-  // TODO: Create string from random time quantam to use in msg queue
-
-  // Setup message
-  buf->mtype = childpid;  // TODO: Make the mtype represent which PID/process to send msg to out of bitvector
-  strcpy(buf->mtext, "50000");
-  *len = strlen(buf->mtext);
-
-  // SEND message into queue
-  if (msgsnd(msgid, buf, (*len)+1, IPC_NOWAIT) == -1)
-    perror("msgsnd:");
-
-  // Increase clock by `dispatchtime`
-  *clocknano += dispatchtime;
-
-  // Write to logfile "Dispatching process...."
-  fprintf(logptr, "OSS: Dispatching process with PID %d and from Queue 1 at time %u:%u\n", childpid, *clocksec, *clocknano);
-
-  // Write to logifle "total time this dispatch...."
-  fprintf(logptr, "OSS: -> total time spent in dispatch was %u nanoseconds\n", dispatchtime);
-  
-
-  // RECEIVE a message from the queue
-  if(msgrcv(msgid, buf, sizeof(buf->mtext), 99, 0) == -1)
-  {
-    perror("ERROR::OSS - msgrcv");
-    exit(1);
-  }
-
-}
