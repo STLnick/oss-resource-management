@@ -219,6 +219,7 @@ int main(int argc, char **argv)
     printf("TEST: right before msgrcv in mainloop...\n"); 
 
     // Non-blocking receive on message queue
+    // TODO: Alter message to bring in the PID(0,1,2), Resource Needed(R1,R2,...), # of Resource Needed(0,1,2...)
     if(msgrcv(msgid, &buf, sizeof(buf.mtext), 99, IPC_NOWAIT) == -1)
     {
       if (errno != 42) { // 42 is just no message, perror all other errors
@@ -228,7 +229,8 @@ int main(int argc, char **argv)
     } else {
       printf("OSS::msg rcv: \"%s\"\n", buf.mtext);
 
-      // TODO: If message received write appropriate msg to logfile
+      // If message received write appropriate msg to logfile
+      // TODO: - replace 'Rx' with the actual resource requested from process
       fprintf(logptr, "OSS has detected Process %s requesting resource Rx at time %u:%u\n", buf.mtext, *clocksec, *clocknano);
 
     }
@@ -289,7 +291,7 @@ int main(int argc, char **argv)
 void incrementclock(unsigned int *sec, unsigned int *nano, int amount)
 {
   int sum = *nano + amount;
-  if (sum > 1000000000) {
+  if (sum >= 1000000000) {
     *nano = (sum - 1000000000);
     *sec += 1;
   } else {
@@ -337,7 +339,7 @@ void generaterandomtime(unsigned int *nano, unsigned int *sec, unsigned int maxn
   int maxpossibletimenano = maxnano + (maxsec * 1000000000);
   int randomtime = random() % maxpossibletimenano;
 
-  if (randomtime > 1000000000)
+  if (randomtime >= 1000000000)
   {
     *sec = 1;
     *nano = randomtime - 1000000000;
