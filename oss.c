@@ -13,6 +13,7 @@
 
 #define LOOP_INC 100000000
 #define PERMS 0664
+#define PROC_LIMIT 18
 
 /* Message Queue structure */
 struct msgbuf {
@@ -28,6 +29,8 @@ void generaterandomtime(unsigned int *nano, unsigned int *sec, unsigned int maxn
 int main(int argc, char **argv)
 {
   int childpid; // Holds PID after fork
+  int proc_cnt; // Holds number of children processes executing
+  int status;   // Holds child status returned in wait()
 
   FILE *logptr; // File pointer for logfile
 
@@ -170,16 +173,72 @@ int main(int argc, char **argv)
   // 2. Increment Shared Clock
 
   int i;
-  for (i = 0; i < 20; i++) {
+  for (i = 1; i <= 20; i++) {
+    printf("oss.index: %i\n", i);
 
 
+    if ((childpid = fork()) == -1) {
+      perror("Fork failed!");
+      exit(1);
+    }
+    
+    // Child Code - - - - -
+    if (childpid == 0) {
+      char strindex[100+1] = {'\0'}; // Create string from shared memory clock nanoseconds id
+      sprintf(strindex, "%d", i); 
+      execl("./user_proc", strclocksecid, strclocknanoid, strindex, '\0');
+      perror("Child failed to exec!");
+      exit(1);
+    }
+ 
+    proc_cnt++;    
 
 
+    // TODO: Non-blocking receive on message queue
+    if(msgrcv(msgid, &buf, sizeof(buf.mtext), 99, 0) == -1)
+    {
+      perror("oss.c - msgrcv");
+      exit(1);
+    }
+
+    printf("OSS::msg rcv: %s\n", buf.mtext);
+
+    // TODO: If message received write appropriate msg to logfile
+
+    // TODO: Message is a REQUEST => run D.A. algorithm to determine safe/unsafe state
+
+
+    // TESTING: using smaller number for test, have constant PROC_LIMIT defined at 18
+    //if (proc_cnt == 3) {
+    //  wait(&status);
+    //  proc_cnt--;
+    //}
 
     // Increment shared clock
     incrementclock(clocksec, clocknano, LOOP_INC);
-    //*clocknano += LOOP_INC;
   }
+
+  // TODO: TESTING
+  printf("Passed initial loop of OSS --- before 2nd for to msgsnd\n");
+
+  for (i = 1; i <= 20; i++) {
+    buf.mtype = i;
+    strcpy(buf.mtext, "String here");
+    len = strlen(buf.mtext);
+
+
+    
+    if (msgsnd(msgid, &buf, len+1, 0) == -1)
+      perror("msgsnd:");
+  }
+
+
+  while (proc_cnt != 0) {
+    wait(&status);
+    proc_cnt--;
+  }
+
+
 
 
 
@@ -207,11 +266,6 @@ int main(int argc, char **argv)
 
 void incrementclock(unsigned int *sec, unsigned int *nano, int amount)
 {
-  printf("- - Increment - -\n");
-  printf("- amount: %d\n", amount);
-  printf("- sec:    %u\n", *sec);
-  printf("- nano:    %u\n", *nano);
-
   int sum = *nano + amount;
   if (sum > 1000000000) {
     *nano = (sum - 1000000000);

@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 int detach(int shmid, void *shmaddr);
+int generaterandomnumber(int max);
 
 #define PERMS 0644
 
@@ -22,7 +23,9 @@ struct msgbuf {
 
 int main (int argc, char **argv)
 {
-  printf("::Begin:: Child Process\n");
+  printf("::Begin:: Child Process --%d\n", getpid());
+  int index = atoi(argv[2]); // Index/"PID" of process
+  printf("child%d.index: %i\n", getpid(), index);
 
   int *clocknano;                  // Shared memory segment for clock nanoseconds
   int clocknanoid = atoi(argv[1]); // ID for shared memory clock nanoseconds segment
@@ -66,33 +69,35 @@ int main (int argc, char **argv)
 
 
 
-
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
   /* * * * *                     MAIN LOOP                       * * * * */
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+  int i;
+  for (i = 0; i < 1; i++) {
+    char str[100+1] = {'\0'}; // Create string from shared memory clock seconds id
+    sprintf(str, "%d: %d", getpid(), index); 
 
-  // RECEIVE message from the queue
-  //if(msgrcv(msgid, &buf, sizeof(buf.mtext), pcbindex, 0) == -1)
-  //{
-  //  perror("user.c - msgrcv");
-  //  exit(1);
-  //}
+    /* * * SEND MESSAGE: 'request a resource' from oss * * */ 
+    buf.mtype = 99;
+    strcpy(buf.mtext, str);
+    len = strlen(buf.mtext);
 
-  // Seed random number generator
-  //srand((unsigned int) getpid());
+    if (msgsnd(msgid, &buf, len+1, 0) == -1) {
+      perror("user_proc_msgsnd:");
+      exit(1);
+    }
 
-  //int randnum = rand() % 100;
+    /* * * RECEIVE MESSAGE: receive approval/denial of resource request from oss * * */
 
-  // Setup message to send
-  buf.mtype = 99;
-  strcpy(buf.mtext, "TEST");
-  len = strlen(buf.mtext);
+    if(msgrcv(msgid, &buf, sizeof(buf.mtext), index, 0) == -1) {
+      perror("user.c - msgrcv");
+      exit(1);
+    }
 
-  // SEND message
-  if (msgsnd(msgid, &buf, len+1, 0) == -1)
-    perror("msgsnd:");
+    printf("P-%d received msg!\n", getpid());
+    printf("   -msg: %s\n", buf.mtext);
 
-
+  }
 
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
   /* * * * *                     END MAIN LOOP                   * * * * */
@@ -106,7 +111,7 @@ int main (int argc, char **argv)
   detach(clocksecid, clocksec);
   detach(clocknanoid, clocknano);
 
-  printf("::END:: Child Process\n");
+  printf("::END:: Child Process --%d\n", getpid());
 
   return 0;
 }
@@ -125,4 +130,9 @@ int detach(int shmid, void *shmaddr)
   errno = error;
   perror("Error: ");
   return -1;
+}
+
+int generaterandomnumber(int max)
+{
+  return (random() % max) + 1;
 }
