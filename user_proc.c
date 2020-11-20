@@ -25,7 +25,6 @@ int main (int argc, char **argv)
 {
   printf("::Begin:: Child Process --%d\n", getpid());
   int index = atoi(argv[2]); // Index/"PID" of process
-  printf("child%d.index: %i\n", getpid(), index);
 
   int *clocknano;                  // Shared memory segment for clock nanoseconds
   int clocknanoid = atoi(argv[1]); // ID for shared memory clock nanoseconds segment
@@ -36,7 +35,6 @@ int main (int argc, char **argv)
   struct msgbuf buf; // Struct for message queue
   int msgid;         // ID for message queue
   key_t msgkey;      // Key for message queue
-
 
   /* * MESSAGE QUEUE * */
   // Retrieve key established in oss.c
@@ -75,7 +73,7 @@ int main (int argc, char **argv)
   int i;
   for (i = 0; i < 1; i++) {
     char str[100+1] = {'\0'}; // Create string from shared memory clock seconds id
-    sprintf(str, "%d: %d", getpid(), index); 
+    sprintf(str, "%d", index); 
 
     /* * * SEND MESSAGE: 'request a resource' from oss * * */ 
     buf.mtype = 99;
