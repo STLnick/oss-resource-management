@@ -11,7 +11,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define LOOP_INC 100000000
+#define LOOP_INC 75000000
 #define PERMS 0664
 #define PROC_LIMIT 18
 
@@ -22,6 +22,9 @@ struct msgbuf {
   long mtype;
   char mtext[100];
 };
+
+/* Resource Descriptor structure */
+//struct resource
 
 void incrementclock(unsigned int *sec, unsigned int *nano, int amount);
 int detachandremove(int shmid, void *shmaddr);
@@ -178,9 +181,10 @@ int main(int argc, char **argv)
   // 1. Non-blocking receive on message queue (processes requesting resources, terminating, releasing a resource)
   // 2. Increment Shared Clock
 
-  int i;
-  for (i = 1; i <= 50; i++) {
-
+  int i = 0;
+  //for (i = 1; i <= 500; i++) {
+  while (*clocksec < 3) {
+    i++;
     // IF clock >= prevclock + wait_to_fork then fork...
 
     if (*clocksec > forkclocksec || (*clocksec == forkclocksec && *clocknano >= forkclocknano) ) {
@@ -201,25 +205,26 @@ int main(int argc, char **argv)
  
       proc_cnt++;    
 
+      fprintf(logptr, "OSS +++generating Process %d at time %u:%u\n", i, *clocksec, *clocknano);
+
       // TESTING: sending messages right away-------
       // TODO: Send a message indicating the upper bound B of time the child will wa
-      buf.mtype = i;
-      sprintf(buf.mtext, "%i:: String here\n", i);
-      len = strlen(buf.mtext);
+      //buf.mtype = i;
+      //sprintf(buf.mtext, "%i:: String here\n", i);
+      //len = strlen(buf.mtext);
 
-      sendmessage(buf, msgid, len);
+      //sendmessage(buf, msgid, len);
       // --------------------------------------------
 
 
       // set next time to fork another process
+      forkclocknano = *clocknano;
+      forkclocksec = *clocksec;
       incrementclock(&forkclocksec, &forkclocknano, TEMP_FORK_INT);
     }
 
 
-    printf("TEST: right before msgrcv in mainloop...\n"); 
-
     // Non-blocking receive on message queue
-    // TODO: Alter message to bring in the PID(0,1,2), Resource Needed(R1,R2,...), # of Resource Needed(0,1,2...)
     if(msgrcv(msgid, &buf, sizeof(buf.mtext), 99, IPC_NOWAIT) == -1)
     {
       if (errno != 42) { // 42 is just no message, perror all other errors
@@ -232,6 +237,12 @@ int main(int argc, char **argv)
       // If message received write appropriate msg to logfile
       // TODO: - replace 'Rx' with the actual resource requested from process
       fprintf(logptr, "OSS has detected Process %s requesting resource Rx at time %u:%u\n", buf.mtext, *clocksec, *clocknano);
+
+      buf.mtype = atoi(buf.mtext);
+      strcpy(buf.mtext, ":: Resource Request RESPONSE\n");
+      len = strlen(buf.mtext);
+
+      sendmessage(buf, msgid, len);
 
     }
 
@@ -252,9 +263,6 @@ int main(int argc, char **argv)
     // Increment shared clock
     incrementclock(clocksec, clocknano, LOOP_INC);
   }
-
-  // TODO: TESTING
-  printf("Passed initial loop of OSS --- before 2nd for to msgsnd\n");
 
 
   while (proc_cnt != 0) {

@@ -10,31 +10,41 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-int detach(int shmid, void *shmaddr);
-int generaterandomnumber(int max);
-
-#define PERMS 0644
-
 /* Message Queue structure */
 struct msgbuf {
   long mtype;
   char mtext[100];
 };
 
+int detach(int shmid, void *shmaddr);
+int generaterandomnumber(int max);
+void incrementclock(unsigned int *sec, unsigned int *nano, int amount);
+void updatewaitclock(unsigned int *clocksec, unsigned int *clocknano, unsigned int *waitsec, unsigned int *waitnano);
+void preparemessage(struct msgbuf buf, int type, char str[100+1], int *len);
+void sendmessage(struct msgbuf buf, int msgid, int len);
+
+#define MSG_WAIT_LIMIT 150000000
+#define PERMS 0644
+
 int main (int argc, char **argv)
 {
   printf("::Begin:: Child Process --%d\n", getpid());
   int index = atoi(argv[2]); // Index/"PID" of process
 
-  int *clocknano;                  // Shared memory segment for clock nanoseconds
+  unsigned int *clocknano;                  // Shared memory segment for clock nanoseconds
   int clocknanoid = atoi(argv[1]); // ID for shared memory clock nanoseconds segment
-  int *clocksec;                   // Shared memory segment for clock seconds
+  unsigned int *clocksec;                   // Shared memory segment for clock seconds
   int clocksecid = atoi(argv[0]);  // ID for shared memory clock seconds segment
+
+  unsigned int waitsec;  // Time in seconds when process should make next request
+  unsigned int waitnano; // Time in nanoseconds when process should make next request
 
   int len;           // Holds length of mtext to use in msgsnd invocation
   struct msgbuf buf; // Struct for message queue
   int msgid;         // ID for message queue
   key_t msgkey;      // Key for message queue
+
+  int shouldterminate = 0; // Flag for process to end
 
   /* * MESSAGE QUEUE * */
   // Retrieve key established in oss.c
@@ -66,35 +76,39 @@ int main (int argc, char **argv)
   }
 
 
+  char strindex[100+1] = {'\0'}; // Create string from shared memory clock seconds id
+  sprintf(strindex, "%d", index); 
+
+  // Initialize the wait clock
+  updatewaitclock(clocksec, clocknano, &waitsec, &waitnano);
 
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
   /* * * * *                     MAIN LOOP                       * * * * */
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-  int i;
-  for (i = 0; i < 1; i++) {
-    char str[100+1] = {'\0'}; // Create string from shared memory clock seconds id
-    sprintf(str, "%d", index); 
+  while (shouldterminate == 0) {
+   
+    /* * * SEND MESSAGE: send a request/message to oss * * */
 
-    /* * * SEND MESSAGE: 'request a resource' from oss * * */ 
-    buf.mtype = 99;
-    strcpy(buf.mtext, str);
-    len = strlen(buf.mtext);
-
-    if (msgsnd(msgid, &buf, len+1, 0) == -1) {
-      perror("user_proc_msgsnd:");
-      exit(1);
+    if (*clocksec > waitsec || (*clocksec == waitsec && *clocknano > waitnano)) {
+      preparemessage(buf, 99, strindex, &len);
+      sendmessage(buf, msgid, len);
+      updatewaitclock(clocksec, clocknano, &waitsec, &waitnano);
     }
+
 
     /* * * RECEIVE MESSAGE: receive approval/denial of resource request from oss * * */
 
     if(msgrcv(msgid, &buf, sizeof(buf.mtext), index, 0) == -1) {
-      perror("user.c - msgrcv");
-      exit(1);
+      if (errno != 42) {
+        perror("user.c - msgrcv");
+        exit(1);
+      }
+    } else {
+      printf(" - - -> P-%d received msg!\n", getpid());
+      printf("   -msg: %s\n", buf.mtext);
     }
-
-    printf("P-%d received msg!\n", getpid());
-    printf("   -msg: %s\n", buf.mtext);
-
+    
+    if (*clocksec > 3) shouldterminate = 1;
   }
 
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -133,4 +147,38 @@ int detach(int shmid, void *shmaddr)
 int generaterandomnumber(int max)
 {
   return (random() % max) + 1;
+}
+
+void incrementclock(unsigned int *sec, unsigned int *nano, int amount)
+{
+  int sum = *nano + amount;
+  if (sum >= 1000000000) {
+    *nano = (sum - 1000000000);
+    *sec += 1;
+  } else {
+    *nano = sum;
+  }
+}
+
+void updatewaitclock(unsigned int *clocksec, unsigned int *clocknano, unsigned int *waitsec, unsigned int *waitnano)
+{
+  *waitsec = *clocksec;
+  *waitnano = *clocknano;
+  incrementclock(waitsec, waitnano, generaterandomnumber(MSG_WAIT_LIMIT));
+}
+
+void preparemessage(struct msgbuf buf, int type, char str[100+1], int *len)
+{
+  buf.mtype = type;
+  strcpy(buf.mtext, str);
+  *len = strlen(buf.mtext);
+}
+
+void sendmessage(struct msgbuf buf, int msgid, int len)
+{
+  if (msgsnd(msgid, &buf, len + 1, 0) == -1) {
+    perror("user_proc msgsnd: ");
+  } else {
+    printf("*** Child sent msg ***\n");
+  }
 }
